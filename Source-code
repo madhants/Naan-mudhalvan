@@ -1,0 +1,104 @@
+# 1. Import Libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+
+sns.set(style='whitegrid')
+
+# 2. Load Dataset
+df = pd.read_csv('US_Accidents_Dataset.csv')  # Replace with actual path or filename
+print(df.shape)
+print(df.columns)
+df.head()
+
+# 3. Data Cleaning
+df.drop_duplicates(inplace=True)
+df.dropna(subset=['Start_Time', 'Severity', 'Weather_Condition'], inplace=True)
+
+# 4. Feature Engineering
+df['Start_Time'] = pd.to_datetime(df['Start_Time'])
+df['Hour'] = df['Start_Time'].dt.hour
+df['Day'] = df['Start_Time'].dt.dayofweek
+df['Month'] = df['Start_Time'].dt.month
+df['is_weekend'] = df['Day'].apply(lambda x: 1 if x >= 5 else 0)
+df['is_peak_hour'] = df['Hour'].apply(lambda x: 1 if 7 <= x <= 9 or 16 <= x <= 18 else 0)
+df['bad_weather'] = df['Weather_Condition'].isin(['Rain', 'Snow', 'Fog', 'Thunderstorm']).astype(int)
+
+# 5. Univariate Analysis
+plt.figure(figsize=(6,4))
+sns.countplot(x='Severity', data=df)
+plt.title('Severity Distribution')
+plt.show()
+
+plt.figure(figsize=(8,4))
+sns.histplot(df['Hour'], bins=24, kde=True)
+plt.title('Accidents by Hour')
+plt.show()
+
+plt.figure(figsize=(10,4))
+sns.countplot(x='Weather_Condition', data=df,
+              order=df['Weather_Condition'].value_counts().head(10).index)
+plt.xticks(rotation=45)
+plt.title('Top 10 Weather Conditions')
+plt.show()
+
+# 6. Bivariate Analysis
+plt.figure(figsize=(8,4))
+sns.boxplot(x='Severity', y='Hour', data=df)
+plt.title('Severity vs Hour of Day')
+plt.show()
+
+plt.figure(figsize=(6,4))
+sns.countplot(x='Severity', hue='is_weekend', data=df)
+plt.title('Severity by Weekend vs Weekday')
+plt.show()
+
+plt.figure(figsize=(6,4))
+sns.countplot(x='Severity', hue='bad_weather', data=df)
+plt.title('Severity by Bad Weather')
+plt.show()
+
+# Correlation heatmap
+numeric_features = df[['Severity', 'Hour', 'Day', 'Month', 'is_weekend', 'is_peak_hour', 'bad_weather']]
+plt.figure(figsize=(10,6))
+sns.heatmap(numeric_features.corr(), annot=True, cmap='coolwarm')
+plt.title('Correlation Heatmap')
+plt.show()
+
+# 7. Model Preparation
+features = ['Hour', 'Day', 'Month', 'is_weekend', 'is_peak_hour', 'bad_weather']
+X = df[features]
+y = df['Severity']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# 8. Model Training & Evaluation
+def evaluate_model(model, name):
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    print(f"\n{name} Results:")
+    print("Accuracy:", accuracy_score(y_test, y_pred))
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+
+# Logistic Regression
+lr = LogisticRegression(max_iter=1000)
+evaluate_model(lr, "Logistic Regression")
+
+# Random Forest
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+evaluate_model(rf, "Random Forest")
+
+# XGBoost
+xgb = XGBClassifier(use_label_encoder=False, eval_metric='mlogloss')
+evaluate_model(xgb, "XGBoost")
+
+# Optional: Save Cleaned Dataset
+# df.to_csv('Cleaned_Accident_Data.csv', index=False)
